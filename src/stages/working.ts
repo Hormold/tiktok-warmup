@@ -140,15 +140,6 @@ export class WorkingStage {
   }
 
   /**
-   * Generate random delay based on presets
-   * @deprecated Use getAdaptiveDelay instead for better human-like behavior
-   */
-  private getRandomDelay(range: [number, number]): number {
-    const [min, max] = range;
-    return Math.random() * (max - min) + min;
-  }
-
-  /**
    * Wait for specified duration
    */
   private async wait(seconds: number, reason: string): Promise<void> {
@@ -436,23 +427,25 @@ export class WorkingStage {
         switch (decision.action) {
           case 'like':
             await this.executeLike();
-            await this.scrollToNextVideo();
             break;
           case 'comment':
             if (decision.commentText) {
               await this.executeComment(decision.commentText);
+            } else {
+              logger.warn(`⚠️ [Working] Comment text is empty, skipping`);
             }
-            await this.scrollToNextVideo();
             break;
           case 'next_video':
             logger.debug(`⏭️ [Working] Moving to next video (later)`);
-            await this.scrollToNextVideo();
             break;
           default:
             logger.error(`❌ [Working] Unknown action: ${decision.action}`);
             break;
         }
       }
+
+      // Step 4: Scroll to next video
+      await this.scrollToNextVideo();
       
       // Step 5: Increment video counter AFTER processing is complete
       this.stats.videosWatched++;

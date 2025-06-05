@@ -4,6 +4,8 @@
 
 Advanced TikTok automation system with AI agents using staged architecture, Vision API, and LLM for intelligent content interaction. Supports multiple Android devices simultaneously.
 
+![Demo](./assets/screenshot.png)
+
 ## 🎯 Concept
 
 Agent-based system with three operational stages:

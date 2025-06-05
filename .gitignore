@@ -25,7 +25,6 @@ Thumbs.db
 data/
 
 # Screenshots and recordings
-*.png
 *.jpg
 *.jpeg
 *.mp4 

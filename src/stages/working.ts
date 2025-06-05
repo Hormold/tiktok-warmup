@@ -422,6 +422,7 @@ export class WorkingStage {
       
       // Step 3 + 4: Decide actions and scroll to next video
       const decisions = await this.decideAction();
+      logger.info(`🎯 [Working] Decided to do ${decisions.length} actions: ${decisions.map(d => d.action).join(', ')}`);
       for (const decision of decisions) {
         logger.info(`🎯 [Working] Action decision: ${decision.action} - ${decision.reason}`);
         switch (decision.action) {

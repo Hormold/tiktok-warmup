@@ -203,7 +203,7 @@ export async function interactWithScreen<T>(
             description: 'Finish task, this should be the last step ALWAYS if you are sure that you have completed the task. Stop execution after this, do not continue. Do not take any steps after this.',
             parameters: finalResultSchema,
             execute: async (finalResult: z.infer<typeof finalResultSchema>) => {
-              logger.info(`🏁 [Interacting#${interactionTaskId}] Finished: ${finalResult}`);
+              logger.info(`🏁 [Interacting#${interactionTaskId}] Finished: ${JSON.stringify(finalResult)}`);
               resolve(finalResult as unknown as T);
               return 'Ok. We done here. Stop execution, do not continue. Do not take any steps after this.'
             },

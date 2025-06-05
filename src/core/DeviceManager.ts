@@ -1,5 +1,9 @@
 import fs from 'fs/promises';
 
+import type { ToolSet } from 'ai';
+import { z } from 'zod';
+
+
 import { execAsync, logger } from '../tools/utils.js';
 /**
  * Android device information
@@ -718,5 +722,377 @@ export class DeviceManager {
       logger.error(`❌ Failed to scroll ${direction} on ${deviceId}:`, error);
       throw new Error(`Failed to scroll: ${error}`);
     }
+  }
+
+  /**
+   * Terminate/force stop an application
+   */
+  async terminateApp(deviceId: string, packageName: string): Promise<string> {
+    try {
+      await execAsync(`adb -s ${deviceId} shell am force-stop ${packageName}`);
+      logger.info(`🛑 [DeviceManager] Terminated app "${packageName}" on ${deviceId}`);
+      return `Successfully terminated app: ${packageName}`;
+    } catch (error) {
+      logger.error(`❌ Failed to terminate app "${packageName}" on ${deviceId}:`, error);
+      throw new Error(`Failed to terminate app: ${error}`);
+    }
+  }
+
+  /**
+   * Set device orientation
+   */
+  async setOrientation(deviceId: string, orientation: 'portrait' | 'landscape' | 'auto'): Promise<string> {
+    try {
+      let command: string;
+      switch (orientation) {
+        case 'portrait':
+          command = `adb -s ${deviceId} shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0`;
+          await execAsync(command);
+          await execAsync(`adb -s ${deviceId} shell content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:0`);
+          break;
+        case 'landscape':
+          command = `adb -s ${deviceId} shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:0`;
+          await execAsync(command);
+          await execAsync(`adb -s ${deviceId} shell content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:1`);
+          break;
+        case 'auto':
+          command = `adb -s ${deviceId} shell content insert --uri content://settings/system --bind name:s:accelerometer_rotation --bind value:i:1`;
+          await execAsync(command);
+          break;
+        default:
+          throw new Error(`Unsupported orientation: ${orientation}`);
+      }
+      logger.info(`🔄 [DeviceManager] Set orientation to ${orientation} on ${deviceId}`);
+      return `Successfully set orientation to: ${orientation}`;
+    } catch (error) {
+      logger.error(`❌ Failed to set orientation to ${orientation} on ${deviceId}:`, error);
+      throw new Error(`Failed to set orientation: ${error}`);
+    }
+  }
+
+  /**
+   * Control device volume
+   */
+  async setVolume(deviceId: string, action: 'up' | 'down' | 'mute', steps = 1): Promise<string> {
+    try {
+      let keycode: string;
+      let actualSteps = steps;
+      switch (action) {
+        case 'up':
+          keycode = 'KEYCODE_VOLUME_UP';
+          break;
+        case 'down':
+          keycode = 'KEYCODE_VOLUME_DOWN';
+          break;
+        case 'mute':
+          keycode = 'KEYCODE_VOLUME_MUTE';
+          actualSteps = 1;
+          break;
+        default:
+          throw new Error(`Unsupported volume action: ${action}`);
+      }
+
+      for (let i = 0; i < actualSteps; i++) {
+        await execAsync(`adb -s ${deviceId} shell input keyevent ${keycode}`);
+        if (actualSteps > 1) await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      logger.info(`🔊 [DeviceManager] Volume ${action} (${actualSteps} steps) on ${deviceId}`);
+      return `Successfully adjusted volume: ${action} x${actualSteps}`;
+    } catch (error) {
+      logger.error(`❌ Failed to adjust volume on ${deviceId}:`, error);
+      throw new Error(`Failed to adjust volume: ${error}`);
+    }
+  }
+
+  /**
+   * Navigation shortcuts
+   */
+  async navigateBack(deviceId: string): Promise<string> {
+    return await this.pressKey(deviceId, 'KEYCODE_BACK');
+  }
+
+  async navigateHome(deviceId: string): Promise<string> {
+    return await this.pressKey(deviceId, 'KEYCODE_HOME');
+  }
+
+  async openRecents(deviceId: string): Promise<string> {
+    return await this.pressKey(deviceId, 'KEYCODE_APP_SWITCH');
+  }
+
+  /**
+   * Clipboard operations
+   */
+  async setClipboard(deviceId: string, text: string): Promise<string> {
+    try {
+      // Escape special characters for shell
+      const escapedText = text.replace(/'/g, "'\"'\"'");
+      await execAsync(`adb -s ${deviceId} shell am broadcast -a clipper.set -e text '${escapedText}'`);
+      logger.info(`📋 [DeviceManager] Set clipboard on ${deviceId}`);
+      return `Successfully set clipboard content`;
+    } catch (error) {
+      logger.error(`❌ Failed to set clipboard on ${deviceId}:`, error);
+      throw new Error(`Failed to set clipboard: ${error}`);
+    }
+  }
+
+  async getClipboard(deviceId: string): Promise<string> {
+    try {
+      const result = await execAsync(`adb -s ${deviceId} shell am broadcast -a clipper.get`);
+      const output = result.stdout || result;
+      logger.info(`📋 [DeviceManager] Got clipboard from ${deviceId}`);
+      return typeof output === 'string' ? output.trim() : '';
+    } catch (error) {
+      logger.error(`❌ Failed to get clipboard from ${deviceId}:`, error);
+      return '';
+    }
+  }
+
+  /**
+   * Screen recording
+   */
+  async startScreenRecording(deviceId: string, outputPath: string, duration = 30): Promise<string> {
+    try {
+      const devicePath = `/sdcard/recording_${Date.now()}.mp4`;
+      
+      // Start recording in background
+      void execAsync(`adb -s ${deviceId} shell screenrecord --time-limit ${duration} ${devicePath}`);
+      
+      // Wait for recording to complete
+      await new Promise(resolve => setTimeout(resolve, duration * 1000 + 1000));
+      
+      // Pull recording to local
+      await execAsync(`adb -s ${deviceId} pull ${devicePath} "${outputPath}"`);
+      
+      // Clean up device file
+      await execAsync(`adb -s ${deviceId} shell rm ${devicePath}`);
+      
+      logger.info(`🎥 [DeviceManager] Screen recording saved to: ${outputPath}`);
+      return `Successfully recorded screen to: ${outputPath}`;
+    } catch (error) {
+      logger.error(`❌ Failed to record screen on ${deviceId}:`, error);
+      throw new Error(`Failed to record screen: ${error}`);
+    }
+  }
+
+  /**
+   * Wait/delay helper
+   */
+  async wait(seconds: number, reason = 'Generic wait'): Promise<string> {
+    logger.info(`⏳ [DeviceManager] Waiting ${seconds}s: ${reason}`);
+    await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+    return `Waited ${seconds} seconds: ${reason}`;
+  }
+
+  /**
+   * Enhanced text input with better emoji/special character support
+   */
+  async inputTextAdvanced(deviceId: string, text: string, method: 'standard' | 'ime' | 'clipboard' = 'standard'): Promise<string> {
+    try {
+      switch (method) {
+        case 'clipboard':
+          // Use clipboard for complex text
+          await this.setClipboard(deviceId, text);
+          await this.pressKey(deviceId, 'KEYCODE_PASTE');
+          break;
+        case 'ime':
+          // Use IME for international characters
+          await execAsync(`adb -s ${deviceId} shell ime set com.android.inputmethod.latin/.LatinIME`);
+          await this.inputText(deviceId, text);
+          break;
+        case 'standard':
+        default:
+          return await this.inputText(deviceId, text);
+      }
+      
+      logger.info(`⌨️ [DeviceManager] Advanced text input (${method}) "${text}" on ${deviceId}`);
+      return `Successfully input text using ${method} method: '${text}'`;
+    } catch (error) {
+      logger.error(`❌ Failed advanced text input on ${deviceId}:`, error);
+      throw new Error(`Failed advanced text input: ${error}`);
+    }
+  }
+
+  getAsAiTools(deviceId: string): ToolSet {
+    const tools: ToolSet = {
+      launchApp: {
+        description: 'Launch an application by package name',
+        parameters: z.object({
+          packageName: z.string().describe('The package name of the app to launch'),
+          activityName: z.string().optional().describe('Optional specific activity to launch'),
+        }),
+        execute: async ({ packageName, activityName }) => {
+          return await this.launchApp(deviceId, packageName, activityName);
+        },
+      },
+      
+      tapScreen: {
+        description: 'Tap the screen at specified coordinates',
+        parameters: z.object({
+          x: z.number().describe('X coordinate to tap'),
+          y: z.number().describe('Y coordinate to tap'),
+        }),
+        execute: async ({ x, y }) => {
+          return await this.tapScreen(deviceId, x, y);
+        },
+      },
+      
+      swipeScreen: {
+        description: 'Swipe from one point to another on the screen',
+        parameters: z.object({
+          x1: z.number().describe('Starting X coordinate'),
+          y1: z.number().describe('Starting Y coordinate'),
+          x2: z.number().describe('Ending X coordinate'),
+          y2: z.number().describe('Ending Y coordinate'),
+          durationMs: z.number().optional().default(300).describe('Duration of swipe in milliseconds'),
+        }),
+        execute: async ({ x1, y1, x2, y2, durationMs }) => {
+          return await this.swipeScreen(deviceId, x1, y1, x2, y2, durationMs);
+        },
+      },
+      
+      terminateApp: {
+        description: 'Terminate/force stop an application',
+        parameters: z.object({
+          packageName: z.string().describe('The package name of the app to terminate'),
+        }),
+        execute: async ({ packageName }) => {
+          return await this.terminateApp(deviceId, packageName);
+        },
+      },
+      
+      getScreenSize: {
+        description: 'Get the screen dimensions of the device',
+        parameters: z.object({}),
+        execute: async () => {
+          return await this.getScreenSize(deviceId);
+        },
+      },
+      
+      pressKey: {
+        description: 'Press a key using Android keycode (e.g., "back", "home", "enter", or keycode number)',
+        parameters: z.object({
+          keycode: z.string().describe('Key to press (common names like "back", "home" or keycode number as string)'),
+        }),
+        execute: async ({ keycode }) => {
+          // Convert string numbers to actual numbers for the function
+          const actualKeycode = isNaN(Number(keycode)) ? keycode : Number(keycode);
+          return await this.pressKey(deviceId, actualKeycode);
+        },
+      },
+      
+      inputText: {
+        description: 'Type text at the current focus position',
+        parameters: z.object({
+          text: z.string().describe('Text to input'),
+        }),
+        execute: async ({ text }) => {
+          return await this.inputText(deviceId, text);
+        },
+      },
+      
+      scrollScreen: {
+        description: 'Scroll the screen in a specified direction',
+        parameters: z.object({
+          direction: z.enum(['up', 'down', 'left', 'right']).describe('Direction to scroll'),
+          distance: z.number().optional().default(500).describe('Distance to scroll in pixels'),
+        }),
+        execute: async ({ direction, distance }) => {
+          return await this.scrollScreen(deviceId, direction, distance);
+        },
+      },
+
+      // New tools
+      setOrientation: {
+        description: 'Set device screen orientation',
+        parameters: z.object({
+          orientation: z.enum(['portrait', 'landscape', 'auto']).describe('Orientation to set'),
+        }),
+        execute: async ({ orientation }) => {
+          return await this.setOrientation(deviceId, orientation);
+        },
+      },
+
+      setVolume: {
+        description: 'Control device volume',
+        parameters: z.object({
+          action: z.enum(['up', 'down', 'mute']).describe('Volume action'),
+          steps: z.number().optional().default(1).describe('Number of volume steps'),
+        }),
+        execute: async ({ action, steps }) => {
+          return await this.setVolume(deviceId, action, steps);
+        },
+      },
+
+      navigateBack: {
+        description: 'Press the back button',
+        parameters: z.object({}),
+        execute: async () => {
+          return await this.navigateBack(deviceId);
+        },
+      },
+
+      navigateHome: {
+        description: 'Press the home button',
+        parameters: z.object({}),
+        execute: async () => {
+          return await this.navigateHome(deviceId);
+        },
+      },
+
+      openRecents: {
+        description: 'Open recent apps menu',
+        parameters: z.object({}),
+        execute: async () => {
+          return await this.openRecents(deviceId);
+        },
+      },
+
+      inputTextAdvanced: {
+        description: 'Advanced text input with support for emojis and special characters',
+        parameters: z.object({
+          text: z.string().describe('Text to input'),
+          method: z.enum(['standard', 'ime', 'clipboard']).optional().default('standard').describe('Input method to use'),
+        }),
+        execute: async ({ text, method }) => {
+          return await this.inputTextAdvanced(deviceId, text, method);
+        },
+      },
+
+      wait: {
+        description: 'Wait for a specified number of seconds',
+        parameters: z.object({
+          seconds: z.number().min(0.1).max(30).describe('Seconds to wait'),
+          reason: z.string().optional().default('Generic wait').describe('Reason for waiting'),
+        }),
+        execute: async ({ seconds, reason }) => {
+          return await this.wait(seconds, reason);
+        },
+      },
+
+      longPress: {
+        description: 'Long press at specified coordinates',
+        parameters: z.object({
+          x: z.number().describe('X coordinate to long press'),
+          y: z.number().describe('Y coordinate to long press'),
+          durationMs: z.number().optional().default(1000).describe('Duration of long press in milliseconds'),
+        }),
+        execute: async ({ x, y, durationMs }) => {
+          return await this.longPress(deviceId, x, y, durationMs);
+        },
+      },
+
+      openUrl: {
+        description: 'Open URL in default browser',
+        parameters: z.object({
+          url: z.string().describe('URL to open'),
+        }),
+        execute: async ({ url }) => {
+          return await this.openUrl(deviceId, url);
+        },
+      },
+    };
+    
+    return tools;
   }
 } 

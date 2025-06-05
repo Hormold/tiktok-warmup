@@ -1,4 +1,3 @@
-import type { ToolSet } from 'ai';
 import { z } from 'zod';
 
 import type { DeviceManager } from '@/core/DeviceManager.js';
@@ -68,7 +67,7 @@ const prompt = `You are a TikTok automation agent in the LEARNING stage. Your mi
       - Test the full flow: click input → type test → find send button
 
     **IMPORTANT RULES:**
-    - Use the provided MCP tools to interact with the phone
+    - Use the provided tools to interact with the phone
     - Take screenshots frequently to see current state. 
     - If TikTok is not open, launch it first using launch_app_activity
     - Be patient - wait for UI to load between actions
@@ -109,12 +108,10 @@ const prompt = `You are a TikTok automation agent in the LEARNING stage. Your mi
  */
 export class LearningStage {
   private deviceId: string;
-  private mcpTools: ToolSet;
   private deviceManager: DeviceManager;
 
-  constructor(deviceId: string, mcpTools: ToolSet, deviceManager: DeviceManager) {
+  constructor(deviceId: string, deviceManager: DeviceManager) {
     this.deviceId = deviceId;
-    this.mcpTools = mcpTools;
     this.deviceManager = deviceManager;
   }
   
@@ -124,7 +121,7 @@ export class LearningStage {
   async execute(): Promise<z.infer<typeof LearningResultSchema>> {
     console.log(`🧠 [Learning] Starting learning stage for device: ${this.deviceId}`);
 
-    return await interactWithScreen<z.infer<typeof LearningResultSchema>>(prompt, this.deviceId, this.deviceManager, this.mcpTools, {}, LearningResultSchema);
+    return await interactWithScreen<z.infer<typeof LearningResultSchema>>(prompt, this.deviceId, this.deviceManager, {}, LearningResultSchema);
   }
 
   /**
@@ -132,7 +129,7 @@ export class LearningStage {
    */
   async cleanup() {
     try {
-      //await phoneMCP.disconnect();
+      // TODO: Implement cleanup
     } catch (error) {
       console.warn(`⚠️ [Learning] Cleanup warning:`, error);
     }
@@ -142,8 +139,8 @@ export class LearningStage {
 /**
  * Direct Learning Stage Execution
  */
-export async function runLearningStage(deviceId: string, mcpTools: ToolSet, deviceManager: DeviceManager): Promise<z.infer<typeof LearningResultSchema>> {
-  const stage = new LearningStage(deviceId, mcpTools, deviceManager);
+export async function runLearningStage(deviceId: string, deviceManager: DeviceManager): Promise<z.infer<typeof LearningResultSchema>> {
+  const stage = new LearningStage(deviceId, deviceManager);
   
   try {
     return await stage.execute();

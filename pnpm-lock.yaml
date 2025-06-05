@@ -14,12 +14,6 @@ importers:
       '@ai-sdk/openai':
         specifier: ^1.3.22
         version: 1.3.22(zod@3.25.51)
-      '@mastra/core':
-        specifier: ^0.10.3
-        version: 0.10.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.25.51)
-      '@mastra/mcp':
-        specifier: ^0.10.2
-        version: 0.10.2(@mastra/core@0.10.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.25.51))(zod@3.25.51)
       ai:
         specifier: 5.0.0-alpha.8
         version: 5.0.0-alpha.8(zod@3.25.51)

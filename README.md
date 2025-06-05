@@ -1,6 +1,6 @@
 # TikTok Agent Bot - Multi-Device Vision Automation
 
-> **Note:** This is a 3-hours hack project entirely written by an LLM. Please excuse any rough edges or code quality issues—your help to remove the MCP server and implement direct ADB device control for one or more specific devices is highly appreciated.
+> **Note:** This is a 3-hours hack project mostly written by an LLMs :-)
 
 Advanced TikTok automation system with AI agents using staged architecture, Vision API, and LLM for intelligent content interaction. Supports multiple Android devices simultaneously.
 
@@ -38,7 +38,6 @@ Agent-based system with three operational stages:
                     │ • interaction.ts│
                     │ • llm.ts        │
                     │ • utils.ts      │
-                    │ • phone-mcp.ts  │
                     └─────────────────┘
 ```
 
@@ -61,7 +60,6 @@ Agent-based system with three operational stages:
 │   │   ├── interaction.ts          // AI-powered screen interaction wrapper
 │   │   ├── utils.ts                // sleep, random, logging, etc.
 │   │   ├── llm.ts                  // LLM integration stub
-│   │   └── phone-mcp.ts            // MCP ADB integration and screen analysis
 │   │
 │   ├── config/
 │   │   └── presets.ts              // settings - comment frequency, phrase lists, etc.
@@ -133,7 +131,6 @@ For each video in infinite loop:
 - **DeviceManager**: Android device discovery and management
 
 ### **Screen Analysis**
-- **phone-mcp analyze_screen**: Inspect UI elements using ADB
 - **Coordinate Detection**: Precise pixel coordinates for interaction using Gemini Vision API
 - **UI State Recognition**: Application state determination
 
@@ -155,7 +152,6 @@ For each video in infinite loop:
 # 2. Node.js 18+ / TypeScript
 # 3. Android devices with USB debugging
 # 4. Google Gemini API key
-# 5. Python 3.x for phone-mcp server
 ```
 
 ### Installation
@@ -164,16 +160,6 @@ For each video in infinite loop:
 git clone <repository>
 cd tiktok-bot
 pnpm install
-
-# Install phone-mcp server (required for device control)
-# Option 1: Using uvx (recommended)
-uvx phone-mcp
-
-# Option 2: Using uv
-uv pip install phone-mcp
-
-# Option 3: Using pip
-pip install phone-mcp
 
 # Setup environment
 cp .env.example .env
@@ -267,9 +253,6 @@ The working stage implements the main automation:
 
 ## ⚠️ Known Issues
 
-### MCP Server Dependency
-Currently the system uses the [phone-mcp](https://github.com/hao-cyber/phone-mcp) server for device control, which only works with one device at a time. This external dependency needs to be replaced with a set of direct ADB functions and removed (planned for near future).
-
 ### Android Only
 Currently only supports Android devices. iOS support may be added later.
 
@@ -323,9 +306,9 @@ if (totalActions >= this.presets.interactions.dailyLimit) {
 - [x] **Configuration system**: Flexible presets for different automation strategies
 - [x] **AI integration**: Gemini for UI analysis and LLM for comment generation
 - [x] **Health monitoring**: Automatic checks and shadow ban detection
+- [x] **Multi-device support**: Direct ADB integration for multiple devices
 
 ### 🔧 In Progress
-- [ ] **Multi-device support**: Replace MCP server with direct function calls
 - [ ] **Device manager**: Complete ADB integration and device lifecycle management
 - [ ] **Agent manager**: Stage transition orchestration and memory persistence
 

@@ -1,4 +1,3 @@
-import type { ToolSet } from 'ai';
 import { z } from 'zod';
 
 import type { AutomationPresets } from '../config/presets.js';
@@ -67,7 +66,6 @@ function sanitizeTextForADB(text: string): string {
 export class WorkingStage {
   private deviceId: string;
   private deviceManager: DeviceManager;
-  private mcpTools: ToolSet;
   private presets: AutomationPresets;
   private learnedUI: LearnedUIElements;
   
@@ -85,13 +83,11 @@ export class WorkingStage {
   constructor(
     deviceId: string, 
     deviceManager: DeviceManager,
-    mcpTools: ToolSet,
     presets: AutomationPresets,
     learnedUI: LearnedUIElements
   ) {
     this.deviceId = deviceId;
     this.deviceManager = deviceManager;
-    this.mcpTools = mcpTools;
     this.presets = presets;
     this.learnedUI = learnedUI;
   }
@@ -126,7 +122,6 @@ export class WorkingStage {
         prompt, 
         this.deviceId, 
         this.deviceManager, 
-        this.mcpTools, 
         {}, 
         AnalysisSchema
       );
@@ -197,7 +192,6 @@ export class WorkingStage {
             prompt,
             this.deviceId,
             this.deviceManager,
-            this.mcpTools,
             {},
             CommentGenerationSchema
           );
@@ -492,6 +486,10 @@ export class WorkingStage {
 - Popups → find close button
 - App crashed → launch_app_activity(package_name="${this.presets.tiktokAppPackage}")
 
+If you see - "Find related content", some user profile or any other strange UI not related to normal TikTok video feed - it means that you are stuck. Just restart the app.
+
+If something goes wrong, good solution - it to terminate and launch app again.
+
 Before finishing the task, make sure to take a screenshot of the screen and analyze it to confirm that the problems are fixed/solved.
 
 **STOP RULE: ALWAYS call finish_task after max 10 steps!**`;
@@ -509,7 +507,6 @@ Before finishing the task, make sure to take a screenshot of the screen and anal
         prompt, 
         this.deviceId, 
         this.deviceManager, 
-        this.mcpTools, 
         {}, 
         HealthCheckSchema
       );
@@ -582,7 +579,6 @@ You can tap, swipe, scroll, etc.
         prompt, 
         this.deviceId, 
         this.deviceManager, 
-        this.mcpTools, 
         {}, 
         ResultSchema
       );
@@ -629,7 +625,6 @@ Check if the like button appears active/highlighted (usually red heart) which wo
           prompt, 
           this.deviceId, 
           this.deviceManager, 
-          this.mcpTools, 
           {}, 
           ShadowBanSchema
         );
@@ -777,11 +772,10 @@ Check if the like button appears active/highlighted (usually red heart) which wo
 export async function runWorkingStage(
   deviceId: string, 
   deviceManager: DeviceManager,
-  mcpTools: ToolSet,
   presets: AutomationPresets,
   learnedUI: LearnedUIElements
 ): Promise<z.infer<typeof WorkingResultSchema>> {
-  const stage = new WorkingStage(deviceId, deviceManager, mcpTools, presets, learnedUI);
+  const stage = new WorkingStage(deviceId, deviceManager, presets, learnedUI);
   
   try {
     return await stage.execute();

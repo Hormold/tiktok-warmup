@@ -95,7 +95,7 @@ const findObject = async (taskId: string, deviceId: string, deviceManager: Devic
       ],
       schema: z.object({
         found: z.boolean().describe('Whether the requested object was found'),
-        box_2d: z.array(z.number()).length(4).describe('Bounding box coordinates [y1, x1, y2, x2] normalized to 0-1000, required if found=true'),
+        box_2d: z.array(z.number()).describe('Bounding box coordinates [y1, x1, y2, x2] normalized to 0-1000, required if found=true'),
         label: z.string().describe('Descriptive label of the found object'),
         another_response: z.string().describe('Explanation if object not found or additional context').optional(),
       }),
@@ -145,7 +145,6 @@ export async function interactWithScreen<T>(
   prompt: string,
   deviceId: string,
   deviceManager: DeviceManager,
-  mcpTools: ToolSet,
   additionalTools: ToolSet,
   finalResultSchema: z.ZodSchema
 ): Promise<T> {
@@ -162,7 +161,7 @@ export async function interactWithScreen<T>(
         stopWhen: [hasToolCall('finish_task'), stepCountIs(20)],
         
         tools: {
-          ...mcpTools,
+          ...deviceManager.getAsAiTools(deviceId),
 
           take_and_analyze_screenshot: {
             description: 'Take a screenshot and ask Visual LLM to analyze it, like return coordinates of the UI element or something else. one task per screenshot. One object to find = one request',

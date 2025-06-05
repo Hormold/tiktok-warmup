@@ -1,9 +1,6 @@
-import type { ToolSet } from 'ai';
-
 import type { AutomationPresets } from '../config/presets.js';
 import { runLearningStage } from '../stages/learning.js';
 import { runWorkingStage } from '../stages/working.js';
-import { getMCPToolsWithSchemas } from '../tools/phone-mcp.js';
 import { logger } from '../tools/utils.js';
 
 
@@ -71,7 +68,6 @@ export class Worker {
   private startTime = 0;
   private currentStage: WorkerStage = 'initiating';
   private learnedUI: LearnedUIElements = {};
-  private mcpTools: ToolSet | null = null;
   private deviceManager: DeviceManager;
 
   constructor(config: WorkerConfig) {
@@ -91,7 +87,7 @@ export class Worker {
   }
 
   /**
-   * Initialize worker and load MCP tools
+   * Initialize worker
    */
   async initialize(): Promise<void> {
     logger.info(`🔧 Initializing worker for ${this.deviceName}...`);
@@ -109,10 +105,6 @@ export class Worker {
         this.currentStage = 'working';
       }
       
-      // Load MCP tools for device interaction
-      logger.info(`📱 Loading MCP tools for device ${this.deviceId}...`);
-      this.mcpTools = await getMCPToolsWithSchemas();
-      
       this.startTime = Date.now();
       this.isInitialized = true;
       
@@ -129,15 +121,12 @@ export class Worker {
    * Run Learning Stage - Let AI learn TikTok UI
    */
   async runLearningStage(): Promise<boolean> {
-    if (!this.mcpTools) {
-      throw new Error('Worker not initialized - MCP tools not available');
-    }
 
     logger.info(`🧠 Starting learning stage for ${this.deviceName}...`);
     this.currentStage = 'learning';
 
     try {
-      const result = await runLearningStage(this.deviceId, this.mcpTools, this.deviceManager);
+      const result = await runLearningStage(this.deviceId, this.deviceManager);
       
       if (result.success && result.tiktokLaunched) {
         // Store learned UI coordinates
@@ -338,7 +327,6 @@ export class Worker {
       const result = await runWorkingStage(
         this.deviceId,
         this.deviceManager,
-        this.mcpTools!,
         this.presets,
         this.learnedUI,
       );

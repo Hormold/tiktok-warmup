@@ -75,7 +75,11 @@ export class WorkingStage {
     likesGiven: 0,
     commentsPosted: 0,
     errors: 0,
+    sessionStartTime: Date.now(),
+    lastActivityTime: Date.now(),
   };
+  private healthFailures = 0;
+  private healthFailureExceeded = false;
 
   constructor(
     deviceId: string, 
@@ -136,6 +140,7 @@ export class WorkingStage {
 
   /**
    * Generate random delay based on presets
+   * @deprecated Use getAdaptiveDelay instead for better human-like behavior
    */
   private getRandomDelay(range: [number, number]): number {
     const [min, max] = range;
@@ -164,24 +169,30 @@ export class WorkingStage {
       
       if (this.presets.comments.useAI) {
         try {
-          const prompt = `You are a TikTok comment generator. Your mission is to create a natural, engaging comment for this video.
+          const prompt = `You are an advanced TikTok comment generator. Create natural, engaging comments that match the video's tone and content.
 
 **CRITICAL: YOU MUST CALL finish_task AS YOUR FINAL STEP!**
 
 **Your workflow:**
-1. take_and_analyze_screenshot(query="Analyze this TikTok video content to understand what it's about - describe the main subject, activity, or theme", action="answer_question")
-2. Based on the video analysis, generate an appropriate comment
+1. take_and_analyze_screenshot(query="Analyze this TikTok video content: What's the main subject, mood/tone, and what type of engagement would be most appropriate?", action="answer_question")
+2. Based on the analysis, generate a contextually perfect comment
 3. finish_task with the comment, confidence, and reasoning
 
-**STRICT COMMENT RULES - FOLLOW EXACTLY:**
-- Keep it under ${this.presets.comments.maxLength} characters
-- USE ONLY BASIC LETTERS AND SPACES - NO PUNCTUATION EXCEPT SPACES
-- ABSOLUTELY NO EMOJIS, SYMBOLS, OR SPECIAL CHARACTERS
-- ONLY lowercase letters a-z and spaces
-- Examples: "this is amazing", "love this", "so good", "definitely trying this"
-- DO NOT USE: ! ? . , : ; ' " & @ # $ % ^ * ( ) - + = [ ] { } | \\ / < > ~
+**ADVANCED COMMENT STRATEGY:**
+- Match the video's energy: upbeat video = enthusiastic comment, calm video = thoughtful comment
+- For tutorials/tips: "definitely trying this", "this is so helpful", "good tip"
+- For funny content: "this is hilarious", "so funny", "made my day"
+- For beautiful/aesthetic: "so beautiful", "gorgeous", "amazing view"
+- For dance/music: "love this song", "great moves", "so good"
+- For food: "looks delicious", "want to try this", "yummy"
 
-**STOP RULE: Always call finish_task with your generated comment!**`;
+**STRICT TECHNICAL RULES:**
+- Keep under ${this.presets.comments.maxLength} characters
+- ONLY lowercase letters a-z and spaces
+- NO punctuation, emojis, symbols, or special characters
+- Examples: "this is amazing", "love this energy", "so helpful thanks"
+
+**STOP RULE: Always call finish_task with your contextual comment!**`;
 
           const result = await interactWithScreen<z.infer<typeof CommentGenerationSchema>>(
             prompt, 
@@ -340,7 +351,7 @@ export class WorkingStage {
       
       await this.deviceManager.swipeScreen(this.deviceId, centerX, startY, centerX, endY, 300);
       
-      const scrollDelay = this.getRandomDelay(this.presets.video.scrollDelay);
+      const scrollDelay = this.getAdaptiveDelay(this.presets.video.scrollDelay);
       await this.wait(scrollDelay, 'Scroll delay between videos');
       
       return true;
@@ -364,7 +375,7 @@ export class WorkingStage {
       await this.wait(this.presets.video.quickSkipDuration, 'Quick skip viewing');
     } else {
       // Normal watch duration
-      const watchDuration = this.getRandomDelay(this.presets.video.watchDuration);
+      const watchDuration = this.getAdaptiveDelay(this.presets.video.watchDuration);
       logger.debug(`👀 [Working] Normal viewing - watching for ${watchDuration.toFixed(1)}s`);
       await this.wait(watchDuration, 'Normal video viewing');
     }
@@ -384,13 +395,30 @@ export class WorkingStage {
         await this.watchVideo();
       }
       
-      // Step 2: Health check every 10th video (after first video)
-      if (this.stats.videosWatched > 0 && this.stats.videosWatched % 10 === 0) {
+      // Step 2: Health check
+      const { healthCheckInterval, maxHealthFailures, shadowBanInterval } = this.presets.control;
+      if (this.stats.videosWatched > 0 && this.stats.videosWatched % healthCheckInterval === 0) {
         logger.info(`🩺 [Working] Performing health check on video #${this.stats.videosWatched + 1}`);
         const healthOk = await this.performHealthCheck();
         if (!healthOk) {
-          logger.warn(`⚠️ [Working] Health check failed, but continuing automation`);
-          // Continue anyway - the health check should have tried to fix issues
+          this.healthFailures++;
+          logger.warn(`⚠️ [Working] Health check failed (${this.healthFailures}/${maxHealthFailures})`);
+          if (this.healthFailures >= maxHealthFailures) {
+            logger.error(`❌ [Working] Health check failed ${maxHealthFailures} times, need to retrain UI coordinates`);
+            this.healthFailureExceeded = true;
+            return false;
+          }
+        } else {
+          this.healthFailures = 0;
+        }
+      }
+      // Shadow ban detection
+      if (this.stats.videosWatched > 0 && this.stats.videosWatched % shadowBanInterval === 0) {
+        logger.info(`🕵️ [Working] Checking for shadow ban on video #${this.stats.videosWatched + 1}`);
+        const shadowBanned = await this.detectShadowBan();
+        if (shadowBanned) {
+          logger.warn(`🚫 [Working] Shadow ban detected! Reducing activity and adding longer delays`);
+          await this.wait(300, 'Shadow ban recovery delay');
         }
       }
       
@@ -474,10 +502,10 @@ Before finishing the task, make sure to take a screenshot of the screen and anal
 
     const HealthCheckSchema = z.object({
       success: z.boolean(),
+      problemWasFixed: z.boolean().describe('Whether the problems were fixed'),
       currentState: z.string().describe('Description of what was found on screen'),
       problemsDetected: z.array(z.string()).describe('List of issues found'),
       actionsPerformed: z.array(z.string()).describe('List of actions taken to fix issues'),
-      message: z.string(),
     });
 
     try {
@@ -491,16 +519,27 @@ Before finishing the task, make sure to take a screenshot of the screen and anal
       );
       
       if (result.success) {
-        logger.info(`✅ [Working] Health check passed: ${result.message}`);
+        logger.info(`✅ [Working] Health check passed`);
         if (result.actionsPerformed.length > 0) {
           logger.info(`🔧 [Working] Fixed issues: ${result.actionsPerformed.join(', ')}`);
         }
       } else {
-        logger.error(`❌ [Working] Health check failed: ${result.message}`);
+        logger.error(`❌ [Working] Health check failed`);
         logger.error(`🚨 [Working] Problems detected: ${result.problemsDetected.join(', ')}`);
         if (result.actionsPerformed.length > 0) {
           logger.info(`🔧 [Working] Attempted fixes: ${result.actionsPerformed.join(', ')}`);
         }
+      }
+
+      if (!result.success) {
+        this.healthFailures++;
+        logger.warn(`⚠️ [Working] Health check failed (${this.healthFailures}/3)`);
+        if (this.healthFailures >= 3) {
+          logger.error(`❌ [Working] Health check failed 3 times, need to retrain UI coordinates`);
+          this.healthFailureExceeded = true;
+        }
+      } else {
+        this.healthFailures = 0;
       }
       
       return result.success;
@@ -566,6 +605,75 @@ You can tap, swipe, scroll, etc.
   }
 
   /**
+   * Check for potential shadow ban by analyzing engagement patterns
+   */
+  async detectShadowBan(): Promise<boolean> {
+    // Simple heuristic: if we've liked 20+ videos but haven't seen any likes register
+    if (this.stats.likesGiven >= 20) {
+      const prompt = `You are a shadow ban detector. Check if our recent likes are registering properly.
+
+**CRITICAL: YOU MUST CALL finish_task AS YOUR FINAL STEP!**
+
+**Your mission:**
+1. take_and_analyze_screenshot(query="Look at the like button - is it highlighted/red showing our like registered?", action="answer_question")  
+2. finish_task with analysis
+
+Check if the like button appears active/highlighted (usually red heart) which would indicate our likes are registering.
+
+**STOP RULE: Call finish_task immediately after screenshot analysis!**`;
+
+      const ShadowBanSchema = z.object({
+        shadowBanned: z.boolean(),
+        reason: z.string(),
+        confidence: z.string(),
+      });
+
+      try {
+        const result = await interactWithScreen<z.infer<typeof ShadowBanSchema>>(
+          prompt, 
+          this.deviceId, 
+          this.deviceManager, 
+          this.mcpTools, 
+          {}, 
+          ShadowBanSchema
+        );
+        
+        if (result.shadowBanned) {
+          logger.warn(`🚫 [Working] Potential shadow ban detected: ${result.reason}`);
+          return true;
+        }
+        
+        logger.debug(`✅ [Working] No shadow ban detected: ${result.reason}`);
+        return false;
+      } catch (error) {
+        logger.error(`❌ [Working] Shadow ban detection failed:`, error);
+        return false;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Adaptive delays based on time of day and activity
+   */
+  private getAdaptiveDelay(baseRange: [number, number]): number {
+    const hour = new Date().getHours();
+    const [min, max] = baseRange;
+    
+    // Slower during peak hours (12-18) to seem more human
+    const peakMultiplier = (hour >= 12 && hour <= 18) ? 1.5 : 1.0;
+    
+    // Add some randomness based on current stats to avoid patterns
+    const activityMultiplier = 1 + (this.stats.likesGiven * 0.01); // Slower as we do more
+    
+    const adjustedMin = min * peakMultiplier * activityMultiplier;
+    const adjustedMax = max * peakMultiplier * activityMultiplier;
+    
+    return Math.random() * (adjustedMax - adjustedMin) + adjustedMin;
+  }
+
+  /**
    * Execute working stage with automation loop
    */
   async execute(): Promise<z.infer<typeof WorkingResultSchema>> {
@@ -586,7 +694,7 @@ You can tap, swipe, scroll, etc.
     
     let shouldContinue = true;
     let consecutiveErrors = 0;
-    const maxConsecutiveErrors = 5;
+    const {maxConsecutiveErrors} = this.presets.control;
     
     try {
       while (shouldContinue) {
@@ -609,10 +717,27 @@ You can tap, swipe, scroll, etc.
           consecutiveErrors = 0; // Reset on success
         }
         
-        // Log progress every 10 videos
+        // Log progress every 10 videos with engagement metrics
         if (this.stats.videosWatched % 10 === 0 && this.stats.videosWatched > 0) {
+          const sessionDuration = (Date.now() - this.stats.sessionStartTime) / 1000 / 60; // minutes
+          const videosPerMinute = (this.stats.videosWatched / sessionDuration).toFixed(1);
+          const engagementRate = ((this.stats.likesGiven + this.stats.commentsPosted) / this.stats.videosWatched * 100).toFixed(1);
+          
           logger.info(`📊 [Working] Progress: ${this.stats.videosWatched} videos, ${this.stats.likesGiven} likes, ${this.stats.commentsPosted} comments`);
+          logger.info(`📈 [Working] Metrics: ${videosPerMinute} videos/min, ${engagementRate}% engagement rate, ${sessionDuration.toFixed(1)}m session`);
         }
+      }
+      
+      // If health check failed too often, prompt retraining
+      if (this.healthFailureExceeded) {
+        return {
+          success: false,
+          videosWatched: this.stats.videosWatched,
+          likesGiven: this.stats.likesGiven,
+          commentsPosted: this.stats.commentsPosted,
+          shouldContinue: false,
+          message: 'Health check failed 3 times. Delete data/learned-ui-data.json and rerun learning stage.',
+        };
       }
       
       return {

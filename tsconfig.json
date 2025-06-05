@@ -25,6 +25,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "mcp-tools.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 } 

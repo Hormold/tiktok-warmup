@@ -21,6 +21,14 @@ export interface AutomationPresets {
     useAI: boolean;
     maxLength: number;
   };
+  
+  // Control settings for health checks, errors, and ban detection
+  control: {
+    healthCheckInterval: number;   // number of videos between health checks
+    maxHealthFailures: number;     // max consecutive health check failures
+    shadowBanInterval: number;     // number of videos between shadow ban checks
+    maxConsecutiveErrors: number;  // max consecutive processing errors before stop
+  };
 }
 
 /**
@@ -60,5 +68,12 @@ export const AUTOMATION_PRESETS: AutomationPresets = {
     ],
     useAI: true,
     maxLength: 50,
+  },
+  
+  control: {
+    healthCheckInterval: 10, // Every 10 videos check screen if it is healthy and looks like TikTok feed
+    maxHealthFailures: 3, // Max 3 health check failures before retraining UI coordinates
+    shadowBanInterval: 50, // Every 50 videos check if the account is shadow banned
+    maxConsecutiveErrors: 5, // Max 5 consecutive errors before stopping
   },
 }; 

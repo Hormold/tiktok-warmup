@@ -1,15 +1,17 @@
 # TikTok Agent Bot - Multi-Device Vision Automation
 
-Продвинутая система автоматизации TikTok с AI-агентами, использующая стадийную архитектуру, Vision API и LLM для умного взаимодействия с контентом. Поддерживает несколько устройств одновременно.
+> **Note:** This is a 3-hours hack project entirely written by an LLM. Please excuse any rough edges or code quality issues—your help to remove the MCP server and implement direct ADB device control for one or more specific devices is highly appreciated.
 
-## 🎯 Концепция
+Advanced TikTok automation system with AI agents using staged architecture, Vision API, and LLM for intelligent content interaction. Supports multiple Android devices simultaneously.
 
-Агентная система с тремя стадиями работы:
-- **Initiating**: Поиск и запуск TikTok на устройстве
-- **Learning**: Изучение интерфейса и сохранение координат кнопок
-- **Working**: Основной луп — просмотр, лайки, комментарии
+## 🎯 Concept
 
-## 🏗️ Архитектура
+Agent-based system with three operational stages:
+- **Initiating**: Finding and launching TikTok on device
+- **Learning**: Interface analysis and button coordinate detection  
+- **Working**: Main loop - viewing, liking, commenting
+
+## 🏗️ Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -33,111 +35,115 @@
                     ┌─────────────────┐
                     │     Tools       │
                     │                 │
-                    │ • vision.ts     │
+                    │ • interaction.ts│
                     │ • llm.ts        │
-                    │ • device.ts     │
+                    │ • utils.ts      │
+                    │ • phone-mcp.ts  │
                     └─────────────────┘
 ```
 
-## 📂 Структура проекта
+## 📂 Project Structure
 
 ```
-tiktok-agent/
+/
 ├── src/
 │   ├── core/
-│   │   ├── AgentManager.ts         // управляет стадиями (initiating, learning, working)
-│   │   ├── Worker.ts               // воркер под конкретное устройство
-│   │   └── DeviceManager.ts        // сканирует устройства и стартует воркеры
+│   │   ├── AgentManager.ts         // manages stages (initiating, learning, working)
+│   │   ├── Worker.ts               // worker for specific device
+│   │   └── DeviceManager.ts        // scans devices and starts workers
 │   │
 │   ├── stages/
-│   │   ├── initiating.ts           // найти TikTok, запустить, дождаться готовности
-│   │   ├── learning.ts             // определить координаты лайка, комментария и т.д.
-│   │   └── working.ts              // основной луп — смотреть, лайкать, иногда комментить
+│   │   ├── initiating.ts           // find TikTok, launch, wait for ready state
+│   │   ├── learning.ts             // determine coordinates of like, comment, etc.
+│   │   └── working.ts              // main loop - watch, like, occasionally comment
 │   │
 │   ├── tools/
-│   │   ├── vision.ts               // Vision API — находит кнопки по скриншоту
-│   │   ├── llm.ts                  // LLM генерация комментариев
-│   │   ├── device.ts               // adb-обвязка: запуск приложений, скриншоты, тапы
-│   │   └── utils.ts                // sleep, random, логирование и пр.
+│   │   ├── interaction.ts          // AI-powered screen interaction wrapper
+│   │   ├── utils.ts                // sleep, random, logging, etc.
+│   │   ├── llm.ts                  // LLM integration stub
+│   │   └── phone-mcp.ts            // MCP ADB integration and screen analysis
 │   │
 │   ├── config/
-│   │   └── presets.ts              // настройки — частота комментов, список фраз и т.д.
+│   │   └── presets.ts              // settings - comment frequency, phrase lists, etc.
 │   │
-│   └── index.ts                    // старт: сканирует устройства и запускает AgentManager
+│   └── index.ts                    // startup: scan devices and launch AgentManager
 ├── package.json
 └── tsconfig.json
 ```
 
-## 🔄 Стадийный Flow
+## 🔄 Stage Flow
 
 ### 1. **Device Detection & Worker Creation**
 ```
 ┌─ DeviceManager.getDevices()
-├─ Сканирует ADB устройства
-├─ Создает Worker для каждого устройства
-├─ Передает Worker в AgentManager
-└─ Запускает первую стадию: initiating
+├─ Scan ADB devices
+├─ Create Worker for each device
+├─ Pass Worker to AgentManager
+└─ Start first stage: initiating
 ```
 
 ### 2. **Stage 1: Initiating**
 ```
-┌─ Worker статус: 'initiating'
-├─ Запуск TikTok через adb
-├─ Screenshot + Vision проверка готовности
-├─ Ожидание полной загрузки интерфейса
-└─ Переход в стадию: learning
+┌─ Worker status: 'initiating'
+├─ Launch TikTok via adb
+├─ Screenshot + UI analysis readiness check
+├─ Wait for full interface loading
+└─ Transition to stage: learning
 ```
 
 ### 3. **Stage 2: Learning**
 ```
-┌─ Worker статус: 'learning'
-├─ Серия скриншотов главного экрана
-├─ Vision API поиск кнопок:
-│  ├─ Like button (координаты x, y)
-│  ├─ Comment button (координаты x, y)
-│  ├─ Comment input field (координаты x, y)
-│  └─ Send button (координаты x, y)
-├─ Сохранение координат в WorkerMemory
-├─ Тестовое взаимодействие (проверка кнопок)
-└─ Переход в стадию: working
+┌─ Worker status: 'learning'
+├─ Series of main screen screenshots
+├─ UI analysis button search:
+│  ├─ Like button (coordinates x, y)
+│  ├─ Comment button (coordinates x, y)
+│  ├─ Comment input field (coordinates x, y)
+│  ├─ Send button (coordinates x, y)
+│  └─ Close button (coordinates x, y)
+├─ Save coordinates to WorkerMemory
+├─ Test interaction (verify buttons work)
+└─ Transition to stage: working
 ```
 
 ### 4. **Stage 3: Working (Main Loop)**
 ```
 For each video in infinite loop:
-┌─ Worker статус: 'working'
-├─ ⏱️ Просмотр видео (60-90 сек)
-├─ 🎲 Рандом решение:
-│  ├─ 70% шанс: Like (использует saved coordinates)
-│  └─ 10% шанс: Comment
-│     ├─ LLM генерация комментария
-│     ├─ Tap на comment input
-│     ├─ Ввод текста
-│     └─ Tap на send button
-├─ 📱 Swipe для следующего видео
-├─ 📊 Обновление статистики Worker
-└─ Повтор цикла
+┌─ Worker status: 'working'
+├─ ⏱️ Watch video (5-10 sec normal, 1 sec quick skip 20% chance)
+├─ 🎲 Random decision:
+│  ├─ 70% chance: Like (uses saved coordinates)
+│  └─ 10% chance: Comment
+│     ├─ AI comment generation or template
+│     ├─ Tap comment input
+│     ├─ Enter text
+│     └─ Tap send button
+├─ 📱 Swipe to next video
+├─ 🩺 Health check every 10th video
+├─ 🕵️ Shadow ban detection every 20th video
+├─ 📊 Update Worker statistics
+└─ Repeat cycle
 ```
 
 ## 🛠️ Technology Stack
 
-### **Core Management** (TypeScript)
-- **AgentManager**: Orchestration стадий и переходов между ними
-- **Worker**: Индивидуальный агент для каждого устройства
-- **DeviceManager**: Discovery и management Android устройств
+### **Core Management**
+- **AgentManager**: Stage orchestration and transitions
+- **Worker**: Individual agent per device
+- **DeviceManager**: Android device discovery and management
 
-### **Computer Vision** (API Integration)
-- **Google Vision API / Gemini Vision**: Поиск UI элементов на скриншотах
-- **Coordinate Detection**: Точные пиксельные координаты для взаимодействия
-- **UI State Recognition**: Определение состояния приложения
+### **Screen Analysis**
+- **phone-mcp analyze_screen**: Inspect UI elements using ADB
+- **Coordinate Detection**: Precise pixel coordinates for interaction using Gemini Vision API
+- **UI State Recognition**: Application state determination
 
-### **Language Model** (AI Generation)
-- **OpenAI / Gemini LLM**: Генерация естественных комментариев
-- **Template System**: Комбинация заготовок и AI-генерации
-- **Context Awareness**: Адаптация под контент видео
+### **Language Model**
+- **Google Gemini LLM**: Natural comment generation based on video content
+- **Template System**: Combination of templates and AI generation
+- **Context Awareness**: Video content adaptation
 
-### **Device Control** (Android ADB)
-- **ADB Integration**: Прямое управление Android устройствами
+### **Device Control**
+- **ADB Integration**: Direct Android device control
 - **Screen Automation**: Touch, swipe, type interactions
 - **App Management**: Launch, screenshot, state monitoring
 
@@ -147,22 +153,32 @@ For each video in infinite loop:
 ```bash
 # 1. Android SDK / ADB tools
 # 2. Node.js 18+ / TypeScript
-# 3. Android устройства с USB debugging
-# 4. API ключи: Google Vision, OpenAI/Gemini
+# 3. Android devices with USB debugging
+# 4. Google Gemini API key
+# 5. Python 3.x for phone-mcp server
 ```
 
 ### Installation
 ```bash
 # Clone project
 git clone <repository>
-cd tiktok-agent
+cd tiktok-bot
 pnpm install
+
+# Install phone-mcp server (required for device control)
+# Option 1: Using uvx (recommended)
+uvx phone-mcp
+
+# Option 2: Using uv
+uv pip install phone-mcp
+
+# Option 3: Using pip
+pip install phone-mcp
 
 # Setup environment
 cp .env.example .env
-# Add API keys:
-# GOOGLE_VISION_API_KEY=
-# OPENAI_API_KEY= (or GEMINI_API_KEY=)
+# Add API key:
+# GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key_here
 ```
 
 ### Device Setup
@@ -171,30 +187,28 @@ cp .env.example .env
 # Connect devices and authorize computer
 adb devices  # Should list all connected devices
 
-# Install TikTok on target devices
-adb -s <device_id> install tiktok.apk
 ```
 
 ## ▶️ Usage
 
 ### Automatic Multi-Device
 ```bash
-# Запуск на всех подключенных устройствах
+# Run on all connected devices
 pnpm start
 
-# Система автоматически:
-# 1. Найдет все Android устройства
-# 2. Создаст Worker для каждого
-# 3. Запустит параллельные агенты
-# 4. Пройдет стадии: initiating → learning → working
+# System automatically:
+# 1. Finds all Android devices
+# 2. Creates Worker for each
+# 3. Runs parallel agents
+# 4. Goes through stages: initiating → learning → working
 ```
 
 ### Manual Single Device
 ```bash
-# Запуск на конкретном устройстве
+# Run on specific device
 pnpm start --device <device_id>
 
-# Debugging с подробными логами
+# Debugging with detailed logs
 DEBUG=agent:* pnpm start
 ```
 
@@ -205,98 +219,59 @@ DEBUG=agent:* pnpm start
 // src/config/presets.ts
 export const AUTOMATION_PRESETS = {
   video: {
-    watchDuration: [60, 90],      // Случайное время просмотра
-    scrollDelay: [2, 4],          // Задержка между видео
+    watchDuration: [5, 10],       // Random viewing time (seconds)
+    quickSkipChance: 0.2,         // 20% chance quick skip (1 second)
+    quickSkipDuration: 1,         // Duration for quick skip
+    scrollDelay: [1, 3],          // Delay between videos
   },
   
   interactions: {
-    likeChance: 0.7,              // 70% шанс лайка
-    commentChance: 0.1,           // 10% шанс комментария
-    dailyLimit: 500,              // Лимит действий в день
+    likeChance: 0.7,              // 70% like chance
+    commentChance: 0.1,           // 10% comment chance
+    dailyLimit: 500,              // Daily action limit
   },
   
   comments: {
     templates: [
-      "Amazing! 🔥",
-      "Love this content ❤️",
-      "So cool! 😍"
+      "amazing",
+      "love this content", 
+      "so cool",
+      "great video",
+      // ... more templates
     ],
-    useAI: true,                  // LLM генерация
-    maxLength: 50,                // Максимальная длина
+    useAI: true,                  // LLM generation
+    maxLength: 50,                // Maximum length
   }
 };
 ```
 
-### Vision Detection
-```typescript
-// src/tools/vision.ts
-export interface VisionConfig {
-  confidence: number;             // Минимальная уверенность (0.8)
-  retryAttempts: number;          // Попытки поиска (3)
-  searchRegions: Region[];        // Области поиска UI
-}
-```
+### Learning Stage Behavior
+The learning stage uses UI analysis to:
+1. **Launch TikTok** and verify it's ready
+2. **Locate UI elements** through screenshot analysis:
+   - Like button (heart icon, usually right side)
+   - Comment button (speech bubble icon)
+3. **Learn comment flow** by practicing the sequence:
+   - Click comment → wait → find input field
+   - Test typing → find send button → find close button
+   - Save all coordinates for working stage
 
-## 📊 Monitoring & Stats
+### Working Stage Behavior  
+The working stage implements the main automation:
+1. **Video watching** with realistic durations and quick skip chances
+2. **Action decisions** based on probability (like 70%, comment 10%)
+3. **AI comment generation** or template selection
+4. **Health checks** every 10 videos to ensure proper TikTok state
+5. **Shadow ban detection** every 20 videos
+6. **Adaptive delays** based on time of day and activity
 
-### Real-time Dashboard
-```
-🤖 Active Workers: 3/3
-📱 Devices: Samsung S23, Pixel 7, OnePlus 11
+## ⚠️ Known Issues
 
-Worker #1 (S23):     [Working] Videos: 45, Likes: 32, Comments: 4
-Worker #2 (Pixel):   [Learning] Detecting UI elements...
-Worker #3 (OnePlus): [Working] Videos: 38, Likes: 27, Comments: 3
+### MCP Server Dependency
+Currently the system uses the [phone-mcp](https://github.com/hao-cyber/phone-mcp) server for device control, which only works with one device at a time. This external dependency needs to be replaced with a set of direct ADB functions and removed (planned for near future).
 
-📈 Total Session: 2h 15m, 83 videos, 59 likes, 7 comments
-⚡ Success Rate: Like 98%, Comment 85%
-```
-
-### Logs & Analytics
-```bash
-# View worker logs
-tail -f logs/worker-{device_id}.log
-
-# Performance metrics
-cat logs/stats.json | jq '.workers[] | .performance'
-
-# Error monitoring
-grep ERROR logs/*.log
-```
-
-## 🔍 Development Guide
-
-### Adding New Stages
-```typescript
-// src/stages/custom-stage.ts
-export class CustomStage implements Stage {
-  async execute(worker: Worker): Promise<StageResult> {
-    // Custom stage logic
-    return { success: true, nextStage: 'working' };
-  }
-}
-```
-
-### Custom Vision Tools
-```typescript
-// src/tools/vision.ts
-export async function findCustomElement(
-  screenshot: Buffer,
-  element: string
-): Promise<Coordinates | null> {
-  // Custom vision detection logic
-}
-```
-
-### Worker Extensions
-```typescript
-// src/core/Worker.ts
-export class Worker {
-  async executeCustomAction(action: CustomAction): Promise<boolean> {
-    // Add custom worker capabilities
-  }
-}
-```
+### Android Only
+Currently only supports Android devices. iOS support may be added later.
 
 ## 🎛️ Advanced Features
 
@@ -306,7 +281,7 @@ export class Worker {
 - Rotation strategies
 
 ### Content Analysis
-- Video content categorization
+- Video content categorization via AI vision
 - Engagement prediction
 - Trend detection
 
@@ -317,13 +292,15 @@ export class Worker {
 
 ## ⚠️ Production Considerations
 
-### Rate Limiting
+### Daily Limits
+The system implements a simple daily limit check in the working stage:
 ```typescript
-const RATE_LIMITS = {
-  likes: { max: 100, window: '1h' },
-  comments: { max: 20, window: '1h' },
-  videos: { max: 500, window: '24h' }
-};
+// Check daily limits from presets.ts
+const totalActions = this.stats.likesGiven + this.stats.commentsPosted;
+if (totalActions >= this.presets.interactions.dailyLimit) {
+  logger.info(`🛑 Daily limit reached: ${totalActions}/${this.presets.interactions.dailyLimit}`);
+  return false; // Stop automation
+}
 ```
 
 ### Error Recovery
@@ -335,41 +312,24 @@ const RATE_LIMITS = {
 ### Compliance
 - TikTok API rate respect
 - Human-like behavior patterns
-- Privacy consideration
+- Privacy considerations
 - Terms of service adherence
 
-## 🚦 TODO List
+## 🚦 Current Implementation Status
 
-### 🔧 1. Device Detection (device.ts)
-- [ ] ADB devices scan and connection
-- [ ] Device capabilities detection
-- [ ] Basic controls: tap(x,y), screenshot(), launchApp()
+### ✅ Completed
+- [x] **Learning stage**: AI-powered UI element detection and coordinate learning
+- [x] **Working stage**: Full automation loop with realistic behavior patterns
+- [x] **Configuration system**: Flexible presets for different automation strategies
+- [x] **AI integration**: Gemini for UI analysis and LLM for comment generation
+- [x] **Health monitoring**: Automatic checks and shadow ban detection
 
-### 🧠 2. AgentManager.ts
-- [ ] Worker lifecycle management
-- [ ] Stage transition orchestration  
-- [ ] Memory and state persistence
+### 🔧 In Progress
+- [ ] **Multi-device support**: Replace MCP server with direct function calls
+- [ ] **Device manager**: Complete ADB integration and device lifecycle management
+- [ ] **Agent manager**: Stage transition orchestration and memory persistence
 
-### 🤖 3. Stages Implementation
-- [ ] **initiating.ts**: TikTok launch and readiness check
-- [ ] **learning.ts**: UI mapping and coordinate detection
-- [ ] **working.ts**: Main automation loop
-
-### 📸 4. Vision Tools (vision.ts)
-- [ ] findCoordinates(label, screenshot) implementation
-- [ ] Google Vision API / Gemini integration
-- [ ] Confidence scoring and validation
-
-### 💬 5. LLM Integration (llm.ts)
-- [ ] Comment generation with context
-- [ ] Template system + AI enhancement
-- [ ] Content-aware responses
-
-### ⚙️ 6. Configuration (presets.ts)
-- [ ] Behavioral settings and limits
-- [ ] Device-specific configurations
-- [ ] A/B testing presets
-
----
-
-**Ready to build?** Готов генерить каркас кода для всех файлов сразу. Скажи слово — и будет полная структура с пустыми функциями и TODO комментариями. 
+### 📋 TODO
+- [ ] **Error recovery**: Comprehensive error handling and recovery strategies
+- [ ] **Statistics dashboard**: Real-time monitoring and analytics
+- [ ] **A/B testing**: Multiple preset configurations for optimization

@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+*.log
+
+# Build outputs
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Learned UI data (device-specific)
+data/
+
+# Screenshots and recordings
+*.png
+*.jpg
+*.jpeg
+*.mp4 

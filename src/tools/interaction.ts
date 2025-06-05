@@ -148,7 +148,7 @@ export async function interactWithScreen<T>(
   mcpTools: ToolSet,
   additionalTools: ToolSet,
   finalResultSchema: z.ZodSchema
-): Promise<any> {
+): Promise<T> {
     const interactionTaskId = uuidv4();
     return new Promise((resolve, reject) => {
       generateText({

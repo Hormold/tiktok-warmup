@@ -106,7 +106,6 @@ export class DeviceManager {
     
     // Use cached results if recent
     if (!forceRefresh && (now - this.lastScanTime) < this.scanCacheDuration) {
-      logger.debug('Using cached device list');
       return Array.from(this.cachedDevices.values());
     }
 
@@ -130,7 +129,14 @@ export class DeviceManager {
       this.lastScanTime = now;
 
       logger.info(`📱 Found ${enrichedDevices.length} devices: ${enrichedDevices.map(d => d.name).join(', ')}`);
-      await this.takeScreenshot(enrichedDevices[0].id);
+      if (enrichedDevices.length > 0) {
+        try {
+          await this.takeScreenshot(enrichedDevices[0].id);
+          logger.info(`📸 [DeviceManager] Screenshot captured with ${enrichedDevices[0].id}, looking good`);
+        } catch (err) {
+          logger.debug('Skipping screenshot on first device:', err);
+        }
+      }
       return enrichedDevices;
 
     } catch (error) {

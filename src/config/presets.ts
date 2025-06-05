@@ -3,6 +3,8 @@
  */
 
 export interface AutomationPresets {
+  tiktokAppPackage: string;
+  tiktokLoadTime: number;
   video: {
     watchDuration: [number, number]; // [min, max] seconds for normal viewing
     quickSkipChance: number;         // 0-1 probability to skip after 1 second
@@ -35,6 +37,8 @@ export interface AutomationPresets {
  * Default automation settings
  */
 export const AUTOMATION_PRESETS: AutomationPresets = {
+  tiktokAppPackage: 'com.zhiliaoapp.musically',
+  tiktokLoadTime: 3,
   video: {
     watchDuration: [5, 10],   // Watch 5-10 seconds normally
     quickSkipChance: 0.2,     // Skip quickly on 20% of videos (1 in 5)
@@ -44,7 +48,7 @@ export const AUTOMATION_PRESETS: AutomationPresets = {
   
   interactions: {
     likeChance: 0.7,          // Like 70% of videos
-    commentChance: 0.1,       // Comment on 10% of videos
+    commentChance: 0.99,       // Comment on 10% of videos
     dailyLimit: 500,          // Max 500 actions per day
   },
   

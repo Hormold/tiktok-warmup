@@ -54,7 +54,7 @@ export interface LearnedUIElements {
 /**
  * Worker Stage
  */
-export type WorkerStage = 'initializing' | 'learning' | 'working' | 'stopped' | 'error';
+export type WorkerStage = 'initiating' | 'learning' | 'working' | 'stopped' | 'error';
 
 /**
  * Worker - handles automation for a single device
@@ -69,7 +69,7 @@ export class Worker {
   private stats: WorkerStats;
   private isInitialized = false;
   private startTime = 0;
-  private currentStage: WorkerStage = 'initializing';
+  private currentStage: WorkerStage = 'initiating';
   private learnedUI: LearnedUIElements = {};
   private mcpTools: ToolSet | null = null;
   private deviceManager: DeviceManager;
@@ -97,7 +97,7 @@ export class Worker {
     logger.info(`🔧 Initializing worker for ${this.deviceName}...`);
     
     try {
-      this.currentStage = 'initializing';
+      this.currentStage = 'initiating';
       
       // Load saved UI data if available
       logger.info(`📄 Loading saved UI data for ${this.deviceId}...`);
@@ -366,15 +366,40 @@ export class Worker {
   }
 
   /**
+   * Run Initiating Stage - Launch TikTok and ensure readiness
+   */
+  async runInitiatingStage(): Promise<boolean> {
+    this.currentStage = 'initiating';
+    logger.info(`🚀 [Worker] Initiating stage: launching TikTok on ${this.deviceName}`);
+    try {
+      // Launch TikTok
+      await this.deviceManager.launchApp(this.deviceId, this.presets.tiktokAppPackage);
+      logger.info(`⏳ [Worker] Waiting ${this.presets.tiktokLoadTime}s for TikTok to load`);
+      await new Promise(res => setTimeout(res, this.presets.tiktokLoadTime * 1000));
+      logger.info(`✅ [Worker] Initiating complete for ${this.deviceName}`);
+      return true;
+    } catch (error) {
+      logger.error(`❌ [Worker] Failed to launch TikTok on ${this.deviceName}:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Start full automation pipeline: Initialize → Learn → Work
    */
   async startAutomation(): Promise<void> {
     logger.info(`🚀 Starting automation pipeline for ${this.deviceName}...`);
 
     try {
-      // Step 1: Initialize
+      // Step 1: Initialize (load UI data and tools)
       if (!this.isInitialized) {
         await this.initialize();
+      }
+      // Step 2: Initiating stage (launch TikTok)
+      logger.info(`🚀 Starting initiating stage for ${this.deviceName}...`);
+      const initSuccess = await this.runInitiatingStage();
+      if (!initSuccess) {
+        throw new Error('Initiating stage failed: unable to launch TikTok or wait for it to load. Ensure USB debugging is authorized and TikTok is installed.');
       }
 
       // Step 2: Learning Stage (skip if we have valid saved data)

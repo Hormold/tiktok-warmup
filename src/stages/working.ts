@@ -24,7 +24,7 @@ export const WorkingResultSchema = z.object({
  * Working Stage Action Schema
  */
 export const ActionDecisionSchema = z.object({
-  action: z.enum(['like', 'comment', 'skip', 'next_video']),
+  action: z.enum(['like', 'comment', 'next_video']),
   reason: z.string(),
   commentText: z.string().optional(),
 });
@@ -33,6 +33,7 @@ export const ActionDecisionSchema = z.object({
  * Comment Generation Schema
  */
 export const CommentGenerationSchema = z.object({
+  screenLooksLikeNormalTikTokFeed: z.boolean().describe('Whether the screen looks like a normal TikTok feed? Not a shop, popup, etc.'),
   commentText: z.string().describe('The generated comment text, natural and engaging'),
   confidence: z.string().describe('Confidence level: high/medium/low'),
   reasoning: z.string().describe('Why this comment fits the video content'),
@@ -156,17 +157,25 @@ export class WorkingStage {
   }
 
   /**
-   * Decide what action to take based on presets and AI analysis
+   * Decide what action(s) to take based on presets and AI analysis
    */
-  async decideAction(): Promise<z.infer<typeof ActionDecisionSchema>> {
+  async decideAction(): Promise<Array<z.infer<typeof ActionDecisionSchema>>> {
     // Roll dice for actions based on presets
     const likeRoll = Math.random();
     const commentRoll = Math.random();
-    
+    const decisions: Array<z.infer<typeof ActionDecisionSchema>> = [];
+
+    // Like decision
+    if (likeRoll < this.presets.interactions.likeChance) {
+      decisions.push({
+        action: 'like',
+        reason: `Random like roll: ${likeRoll.toFixed(3)} < ${this.presets.interactions.likeChance}`,
+      });
+    }
+
+    // Comment decision
     if (commentRoll < this.presets.interactions.commentChance) {
-      // Generate comment with AI or use template
       let commentText: string;
-      
       if (this.presets.comments.useAI) {
         try {
           const prompt = `You are an advanced TikTok comment generator. Create natural, engaging comments that match the video's tone and content.
@@ -193,52 +202,50 @@ export class WorkingStage {
 - Examples: "this is amazing", "love this energy", "so helpful thanks"
 
 **STOP RULE: Always call finish_task with your contextual comment!**`;
-
           const result = await interactWithScreen<z.infer<typeof CommentGenerationSchema>>(
-            prompt, 
-            this.deviceId, 
-            this.deviceManager, 
-            this.mcpTools, 
-            {}, 
+            prompt,
+            this.deviceId,
+            this.deviceManager,
+            this.mcpTools,
+            {},
             CommentGenerationSchema
           );
-          
-          // Sanitize the AI-generated comment text
+          if(!result.screenLooksLikeNormalTikTokFeed) {
+            logger.warn(`⚠️ [Working] AI generated comment is not for a normal TikTok feed, skipping`);
+            return [{
+              action: 'next_video',
+              reason: `AI generated comment is not for a normal TikTok feed, skipping`,
+            }];
+          }
           const sanitizedComment = sanitizeTextForADB(result.commentText);
           commentText = sanitizedComment.slice(0, this.presets.comments.maxLength);
           logger.info(`🤖 [Working] AI generated comment: "${commentText}" (confidence: ${result.confidence})`);
-          
         } catch (error) {
-          // Fallback to template if AI generation fails
-          const {templates} = this.presets.comments;
+          const { templates } = this.presets.comments;
           const templateComment = templates[Math.floor(Math.random() * templates.length)];
           commentText = sanitizeTextForADB(templateComment);
           logger.warn(`⚠️ [Working] AI comment generation failed, using template: ${commentText}`, error);
         }
       } else {
-        // Use random template
-        const {templates} = this.presets.comments;
+        const { templates } = this.presets.comments;
         commentText = templates[Math.floor(Math.random() * templates.length)];
       }
-      
-      return {
+      decisions.push({
         action: 'comment',
         reason: `Random comment roll: ${commentRoll.toFixed(3)} < ${this.presets.interactions.commentChance}`,
         commentText,
-      };
+      });
     }
-    
-    if (likeRoll < this.presets.interactions.likeChance) {
-      return {
-        action: 'like',
-        reason: `Random like roll: ${likeRoll.toFixed(3)} < ${this.presets.interactions.likeChance}`,
-      };
+
+    // If no actions, skip
+    if (decisions.length === 0) {
+      decisions.push({
+        action: 'next_video',
+        reason: `No action triggered. Like: ${likeRoll.toFixed(3)}, Comment: ${commentRoll.toFixed(3)}`,
+      });
     }
-    
-    return {
-      action: 'skip',
-      reason: `No action triggered. Like: ${likeRoll.toFixed(3)}, Comment: ${commentRoll.toFixed(3)}`,
-    };
+
+    return decisions;
   }
 
   /**
@@ -422,37 +429,32 @@ export class WorkingStage {
         }
       }
       
-      // Step 3: Decide action
-      const decision = await this.decideAction();
-      logger.info(`🎯 [Working] Action decision: ${decision.action} - ${decision.reason}`);
-      
-      // Step 4: Execute action
-      switch (decision.action) {
-        case 'like':
-          await this.executeLike();
-          break;
-          
-        case 'comment':
-          if (decision.commentText) {
-            await this.executeComment(decision.commentText);
-          }
-          break;
-          
-        case 'skip':
-          logger.debug(`⏭️ [Working] Skipping interaction on this video`);
-          break;
-        case 'next_video':
-          logger.debug(`⏭️ [Working] Moving to next video`);
-          break;
-        default:
-          logger.error(`❌ [Working] Unknown action: ${decision.action}`);
-          break;
+      // Step 3 + 4: Decide actions and scroll to next video
+      const decisions = await this.decideAction();
+      for (const decision of decisions) {
+        logger.info(`🎯 [Working] Action decision: ${decision.action} - ${decision.reason}`);
+        switch (decision.action) {
+          case 'like':
+            await this.executeLike();
+            await this.scrollToNextVideo();
+            break;
+          case 'comment':
+            if (decision.commentText) {
+              await this.executeComment(decision.commentText);
+            }
+            await this.scrollToNextVideo();
+            break;
+          case 'next_video':
+            logger.debug(`⏭️ [Working] Moving to next video (later)`);
+            await this.scrollToNextVideo();
+            break;
+          default:
+            logger.error(`❌ [Working] Unknown action: ${decision.action}`);
+            break;
+        }
       }
       
-      // Step 5: Move to next video
-      await this.scrollToNextVideo();
-      
-      // Step 6: Increment video counter AFTER processing is complete
+      // Step 5: Increment video counter AFTER processing is complete
       this.stats.videosWatched++;
       
       // Check daily limits
@@ -494,7 +496,7 @@ export class WorkingStage {
 - Update prompts → dismiss with "Later" or X
 - Wrong tab → tap "For You" tab
 - Popups → find close button
-- App crashed → launch_app_activity("com.zhiliaoapp.musically")
+- App crashed → launch_app_activity(package_name="${this.presets.tiktokAppPackage}")
 
 Before finishing the task, make sure to take a screenshot of the screen and analyze it to confirm that the problems are fixed/solved.
 
@@ -569,7 +571,7 @@ You can tap, swipe, scroll, etc.
 **STEP-BY-STEP FLOW:**
 1. take_and_analyze_screenshot(query="Is the TikTok app currently open and is the main video feed visible?", action="answer_question")
 2. IF result shows TikTok ready -> finish_task(success=true, message="TikTok is already running")
-3. IF TikTok not ready -> launch_app_activity(package_name="com.zhiliaoapp.musically")
+3. IF TikTok not ready -> launch_app_activity(package_name="${this.presets.tiktokAppPackage}")
 4. wait_for_ui(seconds=5, reason="Wait for TikTok to load after launching")
 5. take_and_analyze_screenshot to verify
 6. finish_task with final result
